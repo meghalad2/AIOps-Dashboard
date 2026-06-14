@@ -1,54 +1,83 @@
-# Autonomous AI-Powered Self-Healing Kubernetes Infrastructure
+# Aegis AIOps Control Plane & Dashboard
 
-This repository contains the complete end-to-end codebase for an autonomous **AI Ops (Artificial Intelligence for IT Operations) Platform** that runs on AWS EKS. It automatically detects production incidents, utilizes a local **Ollama AI Agent** (or cloud OpenAI) to run diagnostic root-cause analyses on logs/events, and executes secure automated remediation scripts (restarting, scaling, or rolling back pods), notifying the platform team via **real-time email alerts** and **GitHub issues**.
+This repository contains the complete codebase for **Aegis AIOps Control Plane & Dashboard**, an autonomous self-healing Kubernetes operations platform. It integrates a secure, AI-powered diagnostic/remediation backend with a modern React-based observability dashboard.
+
+Aegis automatically intercepts container incidents (like crashloops and resource pressure), fetches runtime pod telemetry, diagnoses root causes using a local **Ollama AI Agent** (or cloud OpenAI), executes verified bash-based remediation scripts, and streams real-time updates directly to a glassmorphic web control plane via WebSockets.
 
 ---
 
-## 🏗️ High-Level System Architecture
+## 🏗️ System Architecture Flow
 
 ```text
-               +-----------------------+
-               |  Kubernetes Pods      | (Failing or resource stressed)
-               +-----------+-----------+
-                           |
-                           v (Scrapes metrics)
-               +-----------+-----------+
-               |  Prometheus Server    | (Triggers alert rules)
-               +-----------+-----------+
-                           |
-                           v
-               +-----------+-----------+
-               |  Alertmanager         | (Dispatches webhook alert)
-               +-----------+-----------+
-                           |
-                           v
-               +-----------+-----------+
-               |  AI Webhook Agent     | (Fetches logs, pod specs, events)
-               +-----------+-----------+
-                           |
-                           +-------------------------------+
-                           |                               |
-                           v (SRE reasoning prompt)        v (Runs verified bash script)
-               +-----------+-----------+       +-----------+-----------+
-               | Local Ollama / OpenAI |       | Remediation Scripts   |
-               +-----------+-----------+       +-----------+-----------+
-                           |                               |
-                           +---------------+---------------+
-                                           | (Reports results)
-                                           v
-               +---------------------------+---------------------------+
-               |   📧 Email Notification    |   🐙 GitHub Issue Log     |
-               +---------------------------+---------------------------+
+ ┌────────────────────────────────────────────────────────────────────────┐
+ │               PHASE A: INFRASTRUCTURE & DEPLOYMENT SETUP               │
+ └───────────────────────────────────┬────────────────────────────────────┘
+                                     │
+                                     ▼
+        ┌──────────────────┐   Terraform   ┌──────────────────────────┐
+        │   Mac / CLI      ├──────────────►│   AWS Cloud Environment  │
+        │   Workspace      │    Deploy     │   (VPC Network, EC2)     │
+        └──────────────────┘               └────────────┬─────────────┘
+                                                        │
+                                                        ▼
+                                           ┌──────────────────────────┐
+                                           │   AWS EKS Cluster        │
+                                           │   (Kubernetes Nodes)     │
+                                           └────────────┬─────────────┘
+                                                        │
+ ┌──────────────────────────────────────────────────────┼──────────────────────────────────────────────────────┐
+ │            PHASE B: OPERATIONS                       │             PHASE C: AUTONOMOUS SRE & DASHBOARD      │
+ └──────────────────────────────────────────────────────┼──────────────────────────────────────────────────────┘
+                                                        │
+                                                        ▼
+                                           ┌──────────────────────────┐
+                                           │  sre-ai-agent Pod        │
+                                           └────────────┬─────────────┘
+                                                        │
+                                                        ▼  [POD CRASHES!]
+                                           ┌──────────────────────────┐
+                                           │  Prometheus Database     │
+                                           └────────────┬─────────────┘
+                                                        │
+                                                        ▼  [Fires Alarm]
+                                           ┌──────────────────────────┐
+                                           │  Alertmanager Webhook    │
+                                           └────────────┬─────────────┘
+                                                        │
+                                                        ▼  [POST Webhook Payload]
+  ┌───────────────────────┐  Fetch Specs  ┌──────────────────────────┐  Run Secure  ┌───────────────────────┐
+  │  Kubernetes API       │◄──────────────┤     FastAPI AI Agent     ├─────────────►│  Remediation Engine   │
+  │  Client               │  Logs/Events  │     Webhook Server       │  Execution   │  (Safe Bash Whitelist)│
+  └───────────────────────┘               └────────────┬─────────────┘              └───────────┬───────────┘
+                                                       │                                        │
+                                                       ├────────────────────────┐               │ [rollout restart]
+                                                       ▼  [SRE Prompts]         │ [Events]      ▼
+                                          ┌──────────────────────────┐          │           ┌───────────────────────┐
+                                          │  Ollama / OpenAI         │          │           │   sre-ai-agent        │
+                                          │  (qwen2.5-coder LLM)     │          │           │   is healed!          │
+                                          └────────────┬─────────────┘          │           └───────────────────────┘
+                                                       │                        ▼
+                                                       ▼ [Auto Logs]        ┌──────────────────────────┐
+                                      ┌──────────────────────────────────┐  │ SQLite DB & Event Bus    │
+                                      │ GitHub Issues & Gmail SMTP Email │  │ (Local pub/sub model)    │
+                                      └──────────────────────────────────┘  └───────────┬──────────────┘
+                                                                                        │ [WebSocket / REST]
+                                                                                        ▼
+                                                                            ┌──────────────────────────┐
+                                                                            │ React Vite Dashboard     │
+                                                                            │ (AIOps Control Plane)    │
+                                                                            └──────────────────────────┘
 ```
 
 ---
 
-## 📂 Repository Directory Layout
+## 📂 Directory Structure
 
 ```text
-ai-self-healing-k8s/
+AIOps-Dashboard/
 ├── README.md
-├── Jenkinsfile                  # CI/CD Declarative pipeline configuration
+├── Jenkinsfile                  # CI/CD declarative pipeline configuration
+├── project_architecture_and_definitions.md
 ├── terraform/                   # Infrastructure as Code
 │   ├── provider.tf
 │   ├── vpc.tf
@@ -70,15 +99,35 @@ ai-self-healing-k8s/
 │   ├── values.yaml
 │   ├── alertmanager-config.yaml
 │   └── prometheus-rules.yaml
-├── ai-agent/                    # AI SRE reasoning agent webhook server
+├── ai-agent/                    # AI SRE reasoning agent webhook server & database
 │   ├── requirements.txt
-│   ├── main.py
+│   ├── main.py                  # Self-healing webhook listener
+│   ├── event_bus.py             # Pub/Sub broker & SQLite DB client
+│   ├── models.py                # SQLAlchemy DB schema
+│   ├── database.py              # SQLite session configurations
+│   ├── dashboard_api.py         # FastAPI REST & WebSocket server
+│   ├── run_dashboard.py         # Server bootstrapper on port 8001
+│   ├── seed_data.py             # Seeding script for demonstration
 │   ├── alert_listener.py
 │   ├── kubernetes_client.py
 │   ├── llm_reasoner.py
 │   ├── remediation_engine.py
 │   ├── github_reporter.py
 │   └── email_notifier.py
+├── dashboard/                   # React + Vite Observability Frontend
+│   ├── vite.config.js           # Proxies API & WebSockets to backend
+│   ├── package.json
+│   └── src/
+│       ├── App.jsx              # Dashboard root and WebSocket binder
+│       ├── App.css              # Cyber-ops glassmorphic styling
+│       ├── hooks/
+│       │   └── useWebSocket.js  # Real-time WebSocket hook
+│       └── components/
+│           ├── IncidentFeed.jsx
+│           ├── ReasoningTrace.jsx
+│           ├── MttrChart.jsx
+│           ├── ServiceHeatmap.jsx
+│           └── RemediationTrigger.jsx
 └── scripts/                     # Approved remediation commands
     ├── restart_deployment.sh
     ├── scale_deployment.sh
@@ -88,117 +137,108 @@ ai-self-healing-k8s/
 
 ---
 
-## 🛠️ Prerequisites & Local Setup (MacBook Air)
+## 🛠️ Prerequisites & Local Setup
 
 ### 1. Install CLI Tooling
-Make sure Homebrew is installed, then run:
+Ensure you have Homebrew installed on macOS, then install Node.js, Python, Terraform, Helm, Kubernetes CLI, and Ollama:
 ```bash
-brew install awscli hashicorp/tap/terraform kubernetes-cli helm python3 ollama
+brew install awscli hashicorp/tap/terraform kubernetes-cli helm python3 node ollama
 ```
 
-### 2. Local free LLM Setup (Ollama)
-Start the local Ollama background service and download the coding-optimized reasoning model:
+### 2. Private Local LLM Setup (Ollama)
+Start the local Ollama background service and download the reasoning model:
 ```bash
 brew services start ollama
 ollama run qwen2.5-coder:7b
 ```
-*(For machines with less than 16GB of RAM, use `qwen2.5-coder:1.5b` for lighter, faster inference).*
 
-### 3. Email (Gmail App Password) Setup
-To send automated HTML reports to your inbox:
-1. Go to `myaccount.google.com` > **Security**.
-2. Turn **2-Step Verification** ON.
-3. Search for **App passwords**, create one named `K8s AI Agent`, and copy the 16-character code.
+### 3. SMTP & GitHub Developer Tokens
+Ensure you configure your Gmail app password and a GitHub classic personal access token inside `.env` inside the `ai-agent/` directory:
+```env
+LLM_PROVIDER=ollama
+LLM_MODEL=qwen2.5-coder:7b
+OLLAMA_HOST=http://localhost:11434
 
-### 4. GitHub Developer Token Setup
-To allow the agent to log incidents automatically:
-1. Go to `github.com` Settings > **Developer settings** > **Personal access tokens** > **Tokens (classic)**.
-2. Click **Generate token**, choose the `repo` scope, and save the token safely.
+# GitHub settings
+GITHUB_TOKEN=your_github_token_here
+GITHUB_REPO=your_username/AIOps-Dashboard
 
----
-
-## 🚀 Running the AI Agent Locally
-
-1. **Clone and enter the directory**:
-   ```bash
-   cd ai-self-healing-k8s
-   ```
-2. **Create and activate Python Virtual Environment**:
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -r ai-agent/requirements.txt
-   ```
-3. **Configure Environment Variables** (`.env`):
-   Create a `.env` file inside the `ai-agent/` directory:
-   ```env
-   LLM_PROVIDER=ollama
-   LLM_MODEL=qwen2.5-coder:7b
-   OLLAMA_HOST=http://localhost:11434
-
-   # GitHub settings
-   GITHUB_TOKEN=your_github_token_here
-   GITHUB_REPO=your_username/your_repo_name
-
-   # SMTP settings (Gmail Example)
-   SMTP_HOST=smtp.gmail.com
-   SMTP_PORT=587
-   SMTP_USERNAME=your-email@gmail.com
-   SMTP_PASSWORD=your-app-password
-   SENDER_EMAIL=your-email@gmail.com
-   RECEIVER_EMAIL=your-email@gmail.com
-   ```
-4. **Launch the FastAPI Server**:
-   ```bash
-   python3 ai-agent/main.py
-   ```
-   The agent will boot up and listen for Alertmanager webhooks on `http://localhost:8000/alerts`.
-
----
-
-## 🧪 Simulating an Incident & Self-Healing Demo
-
-### 1. Bootstrap Target Pods
-Deploy the sample microservice to your local/EKS cluster:
-```bash
-kubectl apply -f kubernetes/namespace.yaml
-kubectl apply -f kubernetes/configmap.yaml
-kubectl apply -f kubernetes/secret.yaml
-kubectl apply -f kubernetes/deployment.yaml
+# SMTP settings (Gmail Example)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+SENDER_EMAIL=your-email@gmail.com
+RECEIVER_EMAIL=your-email@gmail.com
 ```
 
-### 2. Trigger Mock Webhook Alert
-To simulate Prometheus detecting a high-memory/crashloop incident on our target pod, send a POST webhook request:
+---
+
+## 🚀 Running the Stack
+
+To run the complete platform locally, open three separate terminal sessions in this directory:
+
+### Terminal 1: Self-Healing Webhook Listener
+```bash
+source venv/bin/activate
+python ai-agent/main.py
+# Webhook server will start on port 8000
+```
+
+### Terminal 2: Dashboard REST & WebSocket API
+```bash
+source venv/bin/activate
+python ai-agent/run_dashboard.py
+# Dashboard backend server will start on port 8001
+```
+
+### Terminal 3: React Dashboard Developer Server
+```bash
+cd dashboard
+npm install
+npm run dev
+# Dashboard frontend opens on http://localhost:3000
+```
+
+---
+
+## 🧪 Seeding & Simulation
+
+### 1. Database Seeding
+To populate the dashboard with 60 days of historical operational logs and charts on first launch:
+```bash
+source venv/bin/activate
+python ai-agent/seed_data.py
+```
+
+### 2. Simulating a Live Pod Incident
+Send a mock Prometheus alert to the agent webhook and watch the dashboard update in real-time:
 ```bash
 curl -X POST http://localhost:8000/alerts \
   -H "Content-Type: application/json" \
   -d '{
     "status": "firing",
-    "alerts": [
-      {
-        "status": "firing",
-        "labels": {
-          "alertname": "PodCrashLooping",
-          "severity": "critical",
-          "action": "auto-heal",
-          "namespace": "production",
-          "pod": "sre-ai-agent-589ff9f75b-abcd",
-          "container": "sre-ai-agent"
-        },
-        "annotations": {
-          "summary": "Pod is in CrashLoopBackOff",
-          "description": "Sre-ai-agent is failing readiness checks and restarting repeatedly."
-        }
+    "alerts": [{
+      "status": "firing",
+      "labels": {
+        "alertname": "PodCrashLooping",
+        "severity": "critical",
+        "action": "auto-heal",
+        "namespace": "production",
+        "pod": "payment-service-7d9f-xk2pq",
+        "container": "payment-service"
+      },
+      "annotations": {
+        "summary": "Readiness probe failures on payment-service",
+        "description": "Pod is in CrashLoopBackOff"
       }
-    ]
+    }]
   }'
 ```
 
-### 3. Observe the Magic!
-Watch your terminal logs as the AI Agent:
-1. **Parses the Alert**: Identifies pod name and namespace.
-2. **Collects Context**: Fetches logs and event statuses automatically.
-3. **AI Diagnostic Reasoner**: Analyzes the log output via Ollama, determines the root cause, and returns a remediation command.
-4. **Executes safe fix**: Runs `scripts/restart_deployment.sh sre-ai-agent production`.
-5. **Creates GitHub Issue**: Automatically creates a beautifully structured incident ticket.
-6. **Sends HTML Email**: Delivers a styled SRE notification report to your Gmail inbox.
+* **Live Action Trace**:
+  * An incident is pushed instantly into the **Incident Feed**.
+  * The **AI Reasoning Trace** displays diagnostic loading animations.
+  * Once diagnosis is ready, Ollama's root cause analysis and the remediation command are shown.
+  * The **Service Health score** adapts to the new failure metrics.
+  * The **MTTR Trend Chart** plots the new recovery time.
