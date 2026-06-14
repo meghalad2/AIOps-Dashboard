@@ -1,6 +1,6 @@
 # Complete End-to-End Project Deployment & Run Guide
 
-Welcome to the master deployment guide for the **AI-Powered Self-Healing Kubernetes Infrastructure** project. This document provides a complete, step-by-step manual from absolute start to finish, including direct installations for every single tool and CLI dependency.
+Welcome to the master deployment guide for the **Aegis AIOps Control Plane & Dashboard** project. This document provides a complete, step-by-step manual from absolute start to finish, including direct installations for every single tool, Python venv setup, database seeding, and React frontend deployment steps.
 
 ---
 
@@ -8,15 +8,16 @@ Welcome to the master deployment guide for the **AI-Powered Self-Healing Kuberne
 1. [Prerequisites & Accounts Setup](#1-prerequisites--accounts-setup)
 2. [CLI Tools Installation Guide (Macbook Air)](#2-cli-tools-installation-guide-macbook-air)
 3. [Writing the Project Configuration (`.env`)](#3-writing-the-project-configuration-env)
-4. [Running the AI Agent Locally (Offline/Mock Mode)](#4-running-the-ai-agent-locally-offlinemock-mode)
+4. [Database Seeding & Running the App Locally (Offline Mode)](#4-database-seeding--running-the-app-locally-offline-mode)
 5. [Testing & Simulating the Self-Healing Flow](#5-testing--simulating-the-self-healing-flow)
 6. [Deploying Real Infrastructure to AWS (Terraform)](#6-deploying-real-infrastructure-to-aws-terraform)
+7. [AWS Resource Cleanup (Teardown)](#7-aws-resource-cleanup-teardown)
 
 ---
 
 ## 🔑 1. Prerequisites & Accounts Setup
 
-Before writing any configuration files, you must gather your access credentials from four sources:
+Before writing any configuration files, you must gather your access credentials from three sources:
 
 ### A. AWS Account Access Keys
 You need API credentials with Admin permissions to configure the AWS CLI and let Terraform provision infrastructure.
@@ -39,7 +40,7 @@ The AI SRE Agent automatically logs incidents in your portfolio repository. It n
 5. Click **Generate new token** > **Generate new token (classic)**.
 6. Enter a description (e.g., `k8s-self-healing-agent-token`).
 7. Check the **`repo`** scope box (grants complete control over public and private repositories).
-8. Click **Generate token at the bottom of the page.**
+8. Click **Generate token** at the bottom of the page.
 9. **CRITICAL**: Copy the generated token immediately! It will disappear forever once you reload the page.
 
 ### C. Gmail SMTP App Password (For Real Emails)
@@ -60,19 +61,19 @@ If you run a command like `aws configure` and get `command not found: aws`, it m
 
 ---
 
-### METHOD A: Direct Native Installers (Recommended & Most Robust)
+### METHOD A: Direct Native Installers (Recommended)
 If Homebrew prompts for a `sudo` password or fails, use these direct, native installer commands. Open your terminal and copy-paste these blocks:
 
 #### 1. Install AWS CLI (Official Amazon Installer)
 This installs the official AWS command-line tools onto your Mac directly:
 ```bash
-# Download official macOS AWS CLI installerpkg
+# Download official macOS AWS CLI installer
 curl "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
 
 # Install package (Requires entering your Mac password in the terminal)
 sudo installer -pkg AWSCLIV2.pkg -target /
 
-# Verify installation (This should now print the aws cli version!)
+# Verify installation (This should print the aws-cli version!)
 aws --version
 ```
 
@@ -122,6 +123,15 @@ sudo mv terraform /usr/local/bin/terraform
 terraform -version
 ```
 
+#### 5. Install Node.js & npm (Frontend Runtime)
+Go to **[nodejs.org](https://nodejs.org)** and download the stable LTS installer, or run:
+```bash
+curl -o node-install.pkg "https://nodejs.org/dist/v20.11.0/node-v20.11.0.pkg"
+sudo installer -pkg node-install.pkg -target /
+node --version
+npm --version
+```
+
 ---
 
 ### METHOD B: The Homebrew Package Manager Method
@@ -136,7 +146,7 @@ echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
 # 3. Install all DevOps tools in a single command
-brew install awscli hashicorp/tap/terraform kubernetes-cli helm python3 ollama
+brew install awscli hashicorp/tap/terraform kubernetes-cli helm python3 node ollama
 ```
 
 ---
@@ -157,7 +167,7 @@ brew install awscli hashicorp/tap/terraform kubernetes-cli helm python3 ollama
 Navigate to your project directory and set up your clean Python interpreter:
 ```bash
 # Enter the project workspace root
-cd /Users/mymtg/.gemini/antigravity-ide/scratch/ai-self-healing-k8s
+cd /Users/mymtg/Downloads/AP-PRJ-2-3/AIOps-Dashboard
 
 # Create Python virtual environment
 python3 -m venv venv
@@ -174,7 +184,7 @@ pip install -r ai-agent/requirements.txt
 ## 📝 3. Writing the Project Configuration (`.env`)
 
 Create a new file at:
-📂 `/Users/mymtg/.gemini/antigravity-ide/scratch/ai-self-healing-k8s/ai-agent/.env`
+📂 `/Users/mymtg/Downloads/AP-PRJ-2-3/AIOps-Dashboard/ai-agent/.env`
 
 Paste the template below, replacing the placeholder values with your exact credentials:
 
@@ -186,7 +196,7 @@ OLLAMA_HOST=http://localhost:11434
 
 # 2. GITHUB REPOSITORY INTEGRATION
 GITHUB_TOKEN=ghp_YourGitHubTokenHere     # Paste your 40-character Developer PAT
-GITHUB_REPO=your_username/your_repo      # GitHub username/repo (e.g. "mymtg/my-portfolio")
+GITHUB_REPO=meghalad2/AIOps-Dashboard     # GitHub username/repo
 
 # 3. GMAIL SMTP ALERTING CONFIGURATION
 SMTP_HOST=smtp.gmail.com
@@ -199,27 +209,53 @@ RECEIVER_EMAIL=your-email@gmail.com      # Target inbox
 
 ---
 
-## 🏃‍♂️ 4. Running the AI Agent Locally (Offline/Mock Mode)
+## 🏃‍♂️ 4. Database Seeding & Running the App Locally (Offline Mode)
 
-The codebase has been engineered with a built-in **Offline Mock Mode**. If you don't have an active AWS EKS cluster running yet, the SRE Agent will automatically detect this, boot up cleanly, and generate highly realistic simulated pod logs and events for testing!
+We have built a fully featured offline demonstration system that doesn't require an active Kubernetes cluster to verify the dashboard and self-healing loop logic.
 
-1. Make sure your virtual environment is active:
-   ```bash
-   source venv/bin/activate
-   ```
-2. Launch the SRE FastAPI Webhook Server:
-   ```bash
-   python3 ai-agent/main.py
-   ```
+### Step 1: Seed the Database
+Ensure your virtual environment is active, then run the database seeder to populate the SQLite database:
+```bash
+cd /Users/mymtg/Downloads/AP-PRJ-2-3/AIOps-Dashboard
+source venv/bin/activate
+python ai-agent/seed_data.py
+```
+This generates 80 realistic incident logs and sets up baseline service health metrics.
+
+### Step 2: Launch the Services
+Open **three separate terminal windows** on your Mac. Run one process in each tab:
+
+* **Terminal 1: Self-Healing Webhook Listener (Port 8000)**
+  ```bash
+  cd /Users/mymtg/Downloads/AP-PRJ-2-3/AIOps-Dashboard
+  source venv/bin/activate
+  python ai-agent/main.py
+  ```
+
+* **Terminal 2: Dashboard Backend API (Port 8001)**
+  ```bash
+  cd /Users/mymtg/Downloads/AP-PRJ-2-3/AIOps-Dashboard
+  source venv/bin/activate
+  python ai-agent/run_dashboard.py
+  ```
+
+* **Terminal 3: React Frontend Dashboard (Port 3000)**
+  ```bash
+  cd /Users/mymtg/Downloads/AP-PRJ-2-3/AIOps-Dashboard/dashboard
+  npm install
+  npm run dev
+  ```
+
+Once all three are running, open your web browser and navigate to **[http://localhost:3000](http://localhost:3000)** to view the live Aegis Control Plane.
 
 ---
 
 ## 🧪 5. Testing & Simulating the Self-Healing Flow
 
-With the SRE Agent running on port `8000`, trigger a simulated incident to watch the autonomous healing loop perform diagnostics:
+With all services active, send a mock Prometheus alert to see the dashboard react in real time:
 
 1. Open a **new terminal window** on your Mac.
-2. Fire a simulated `PodCrashLooping` alert payload to the webhook endpoint using `curl`:
+2. Send a simulated webhook alert:
    ```bash
    curl -X POST http://localhost:8000/alerts \
      -H "Content-Type: application/json" \
@@ -233,18 +269,23 @@ With the SRE Agent running on port `8000`, trigger a simulated incident to watch
              "severity": "critical",
              "action": "auto-heal",
              "namespace": "production",
-             "pod": "sre-ai-agent-589ff9f75b-abcd",
-             "container": "sre-ai-agent"
+             "pod": "payment-service-598ff-abcd",
+             "container": "payment-service"
            },
            "annotations": {
-             "summary": "Pod is in CrashLoopBackOff",
-             "description": "Sre-ai-agent is failing readiness checks and restarting repeatedly."
+             "summary": "Readiness probe failures on payment-service",
+             "description": "Pod is in CrashLoopBackOff"
            }
          }
        ]
      }'
    ```
-3. Watch the terminal logs where `main.py` is running, then check your email inbox and GitHub repository!
+3. Watch the **Aegis Dashboard at `localhost:3000`**:
+   * The new incident will immediately load into the **Incident Feed**.
+   * A loading indicator will appear under **AI Reasoning Trace**.
+   * The reasoning analysis, root cause, and remediation script will render once completed.
+   * The **Service Health** score card for the service will adapt.
+   * The **MTTR Trend Chart** will plot the new incident resolution metric.
 
 ---
 
@@ -253,26 +294,19 @@ With the SRE Agent running on port `8000`, trigger a simulated incident to watch
 Once you are satisfied with local testing and want to deploy the real-world cloud architecture onto AWS:
 
 ### Step A: Authenticate AWS CLI
-Ensure AWS CLI is installed using Step 2 above. 
-
-**Recommended (Direct Exports)**: To prevent signature matching errors, export your credentials directly as environment variables in your active terminal session:
+Ensure AWS CLI is installed. Export your credentials directly in your active terminal session:
 ```bash
 export AWS_ACCESS_KEY_ID="your_access_key_id_here"
 export AWS_SECRET_ACCESS_KEY="your_secret_access_key_here"
 export AWS_DEFAULT_REGION="us-east-1"
 ```
 
-**Verify the credentials**:
-Run this command to check if AWS successfully recognizes you:
+Verify that AWS successfully recognizes you:
 ```bash
 aws sts get-caller-identity
 ```
 
-*(Alternatively, you can run the interactive config command: `aws configure`)*
-
-### Step A.5: Create the AWS SSH Key Pair (.pem)
-Before creating resources, you must provision an SSH Key Pair named `devops-key` in AWS EKS's region (`us-east-1`). This permits secure console access to the Jenkins EC2 instance.
-
+### Step B: Create the AWS SSH Key Pair
 Run this command to create the key pair and securely store your private `.pem` key:
 ```bash
 # Create the key pair in AWS and write to a local .pem file
@@ -280,16 +314,16 @@ aws ec2 create-key-pair \
   --key-name devops-key \
   --query 'KeyMaterial' \
   --output text \
-  --region us-east-1 > /Users/mymtg/.gemini/antigravity-ide/scratch/ai-self-healing-k8s/terraform/devops-key.pem
+  --region us-east-1 > /Users/mymtg/Downloads/AP-PRJ-2-3/AIOps-Dashboard/terraform/devops-key.pem
 
 # Restrict file permissions for SSH client compliance
-chmod 400 /Users/mymtg/.gemini/antigravity-ide/scratch/ai-self-healing-k8s/terraform/devops-key.pem
+chmod 400 /Users/mymtg/Downloads/AP-PRJ-2-3/AIOps-Dashboard/terraform/devops-key.pem
 ```
 
-### Step B: Initialize and Provision
+### Step C: Initialize and Provision
 ```bash
 # Navigate to Terraform folder
-cd /Users/mymtg/.gemini/antigravity-ide/scratch/ai-self-healing-k8s/terraform
+cd /Users/mymtg/Downloads/AP-PRJ-2-3/AIOps-Dashboard/terraform
 
 # Download providers
 terraform init
@@ -301,14 +335,14 @@ terraform validate
 terraform apply -auto-approve
 ```
 
-### Step C: Connect to Your New AWS EKS Cluster
-Once Terraform completes successfully, run this command to redirect your local `kubectl` to your newly created EKS cluster:
+### Step D: Connect to Your New AWS EKS Cluster
+Run this command to redirect your local `kubectl` to your newly created EKS cluster:
 ```bash
 aws eks update-kubeconfig --region us-east-1 --name self-healing-cluster
 ```
 
-### Step C.1: Deploy the Nginx Ingress Controller (Traffic Router)
-We need an Ingress Controller (traffic load-balancer) in EKS to handle incoming web traffic. We use **Helm** to install it:
+### Step E: Deploy the Nginx Ingress Controller (Traffic Router)
+We need an Ingress Controller (traffic load-balancer) in EKS to handle incoming web traffic:
 ```bash
 # 1. Add the official ingress-nginx repository
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
@@ -320,35 +354,27 @@ helm install ingress-nginx ingress-nginx/ingress-nginx \
   --namespace ingress-nginx
 ```
 
-> [!TIP]
-> **Troubleshooting pending releases**: If your installation ever hangs or gets canceled midway (throwing `cannot reuse a name that is still in use`), clean up the corrupted release and rerun:
-> ```bash
-> helm uninstall ingress-nginx -n ingress-nginx
-> helm install ingress-nginx ingress-nginx/ingress-nginx --create-namespace --namespace ingress-nginx
-> ```
-
-### Step C.2: Deploy Prometheus, Grafana, and Alertmanager via Helm
-We will install the complete monitoring stack using our custom routing values, which tells Alertmanager to forward incidents to our AI webhook!
+### Step F: Deploy Prometheus, Grafana, and Alertmanager via Helm
 ```bash
 # 1. Navigate to your project monitoring folder
-cd /Users/mymtg/.gemini/antigravity-ide/scratch/ai-self-healing-k8s/monitoring
+cd /Users/mymtg/Downloads/AP-PRJ-2-3/AIOps-Dashboard/monitoring
 
 # 2. Add the official Prometheus Helm repository
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
 
-# 3. Install the Prometheus Stack (this automatically creates the "production" namespace!)
+# 3. Install the Prometheus Stack
 helm install prometheus-stack prometheus-community/kube-prometheus-stack \
   --create-namespace \
   --namespace production \
   -f values.yaml
 ```
 
-### Step C.3: Deploy the Target billing app (`sre-ai-agent`)
-Deploy the target billing app that we want our SRE AI Agent to monitor and heal:
+### Step G: Deploy the Target microservices
+Deploy the target applications that we want our SRE AI Agent to monitor and heal:
 ```bash
 # 1. Navigate to the project root directory
-cd /Users/mymtg/.gemini/antigravity-ide/scratch/ai-self-healing-k8s
+cd /Users/mymtg/Downloads/AP-PRJ-2-3/AIOps-Dashboard
 
 # 2. Deploy namespace, configmaps, secrets, and deployment manifests
 kubectl apply -f kubernetes/namespace.yaml
@@ -360,101 +386,19 @@ kubectl apply -f kubernetes/hpa.yaml
 kubectl apply -f kubernetes/ingress.yaml
 ```
 
-
-### Step D: Boot Your Production-Connected AI Agent
-Run the agent again:
-```bash
-cd /Users/mymtg/.gemini/antigravity-ide/scratch/ai-self-healing-k8s
-source venv/bin/activate
-python3 ai-agent/main.py
-```
-
 ---
 
-### Step E: Exposing Dashboards & Visualizing EKS Health (Grafana, Prometheus & Alertmanager)
-> [!NOTE]
-> **No accounts or fees required!** You do **NOT** need to create any account or subscription on the Prometheus or Grafana websites. The entire monitoring suite is installed **inside your own private Kubernetes cluster**, meaning it runs completely on your own cloud servers for free.
-
-To access your dashboards, use `kubectl port-forward` to map the cluster services to your Mac's web browser:
-
-#### 1. Open the Grafana Dashboard (Cluster Health Metrics)
-Grafana contains pre-built, premium SRE graphs showing EKS CPU, memory load, and pod container status in real-time.
-- **Run the port-forward command**:
-  ```bash
-  kubectl port-forward svc/prometheus-stack-grafana 3000:80 -n production
-  ```
-- **Open in your browser**: Go to **[http://localhost:3000](http://localhost:3000)**
-- **Login Credentials**:
-  * **Username**: `admin`
-  * **Password**: `admin`
-- **View EKS Health Graphs**:
-  1. Click **Dashboards** on the left menu.
-  2. Open the **"Kubernetes"** folder.
-  3. Select **"Kubernetes / Compute Resources / Namespace (Pods)"** or **"Node Exporter"** to see stunning real-time CPU, RAM, and network graphs!
-
-#### 2. Open the Alertmanager Dashboard (Active Firing Alerts)
-Alertmanager manages which alerts (like pod crashes or high memory usage) are active and maps their routing to your AI agent.
-- **Run the port-forward command**:
-  ```bash
-  kubectl port-forward svc/prometheus-stack-kube-prom-alertmanager 9093:9093 -n production
-  ```
-- **Open in your browser**: Go to **[http://localhost:9093](http://localhost:9093)**
-
-#### 3. Open the Prometheus Dashboard (Raw Metrics & Alarm Equations)
-Prometheus is the database collecting all cluster metrics and running alerting rules.
-- **Run the port-forward command**:
-  ```bash
-  kubectl port-forward svc/prometheus-stack-kube-prom-prometheus 9090:9090 -n production
-  ```
-- **Open in your browser**: Go to **[http://localhost:9090](http://localhost:9090)**
-
----
-
-## 🧹 7. Complete AWS Resource Cleanup (Tearing Down Everything)
+## 🧹 7. AWS Resource Cleanup (Teardown)
 
 > [!WARNING]
-> **Avoid Unwanted AWS Charges!** An active EKS Cluster, managed nodes, and EC2 Jenkins build servers run continuously and will incur active AWS hourly billing. Make sure to tear down all resources when you are finished presenting your project portfolio.
+> **Avoid Unwanted AWS Charges!** An active EKS Cluster, managed nodes, and EC2 Jenkins build servers run continuously and will incur active AWS hourly billing. Make sure to tear down all resources when you are finished.
 
-I have created a fully automated, safe, and robust teardown script located at:
+We have provided an automated, safe, and robust teardown script located at:
 📂 `scripts/destroy_all_resources.sh`
 
-### How the automated cleanup script works:
-1. **Uninstall Helm Releases**: Uninstalls Ingress and Prometheus first. This is critical because Helm controllers automatically spin up AWS **Elastic Load Balancers (ELBs)** inside AWS. If we don't delete them first, the VPC subnets will stay locked by AWS, causing `terraform destroy` to fail or hang!
-2. **Deletes Namespaces**: Cleans up all EKS Kubernetes workspaces.
-3. **Terraform Destroy**: Completely deletes EKS, Managed Node Groups, VPC networking, security groups, and EC2.
-4. **Deletes Key Pairs**: Automatically removes the `devops-key` key pair from your AWS EC2 Console and cleans up the local `.pem` key.
-
-### How to run the cleanup script:
-Open your Mac's terminal and run this single command:
+To clean up all cloud resources:
 ```bash
 # Execute the complete automated cleanup
-/bin/bash /Users/mymtg/.gemini/antigravity-ide/scratch/ai-self-healing-k8s/scripts/destroy_all_resources.sh
+/bin/bash /Users/mymtg/Downloads/AP-PRJ-2-3/AIOps-Dashboard/scripts/destroy_all_resources.sh
 ```
 *Wait about 10 minutes, and the terminal will print a success summary confirming that all AWS cloud charges have stopped!*
-
-### 🔎 Post-Cleanup Audit: Verification Commands
-To double-check and guarantee that no active billing assets remain in your AWS account, run these validation commands in your terminal:
-
-```bash
-# 1. Verify EKS Cluster is completely deleted
-# (Expectation: Should return {"clusters": []})
-aws eks list-clusters --region us-east-1
-
-# 2. Verify all EC2 instances and their current states
-# (Expectation: Should list zero instances or show "terminated" for all)
-aws ec2 describe-instances \
-  --region us-east-1 \
-  --query "Reservations[*].Instances[*].{ID:InstanceId,State:State.Name,Name:Tags[?Key=='Name']|[0].Value}" \
-  --output table
-
-# 3. Verify active Key Pairs in the region
-# (Expectation: 'devops-key' should NOT appear in this list)
-aws ec2 describe-key-pairs --region us-east-1 --query "KeyPairs[*].KeyName" --output table
-
-# 4. Verify all active VPCs
-# (Expectation: 'self-healing-vpc' should NOT appear in this list)
-aws ec2 describe-vpcs --region us-east-1 --query "Vpcs[*].{VpcId:VpcId,Name:Tags[?Key=='Name']|[0].Value,IsDefault:IsDefault}" --output table
-```
-
-
-

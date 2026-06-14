@@ -58,7 +58,8 @@ echo "  - Namespaces deleted successfully."
 # 4. Terraform Destroy (Tears down EKS, VPC, Subnets, and EC2)
 # -------------------------------------------------------------
 echo "STEP 3: Destroying EKS Cluster, VPC, and EC2 Jenkins Server via Terraform (takes ~10 minutes)..."
-cd /Users/mymtg/.gemini/antigravity-ide/scratch/ai-self-healing-k8s/terraform
+# Navigate to Terraform folder relative to script location
+cd "$(dirname "$0")/../terraform"
 
 terraform destroy -auto-approve
 
