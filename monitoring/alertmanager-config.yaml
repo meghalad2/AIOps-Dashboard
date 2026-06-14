@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: ai-agent-routing
+  namespace: production
+  labels:
+    release: prometheus-stack
+spec:
+  route:
+    groupBy: ['alertname', 'namespace', 'pod']
+    groupWait: 10s
+    groupInterval: 10s
+    repeatInterval: 1h
+    receiver: ai-agent-webhook
+  receivers:
+  - name: ai-agent-webhook
+    webhookConfigs:
+    - url: http://ai-agent-service.production.svc.cluster.local:8000/alerts
+      sendResolved: true

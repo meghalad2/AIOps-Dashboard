@@ -1,0 +1,29 @@
+# Virtual Environment
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+
+# Sensitive environment files
+.env
+*.pem
+devops-key.pem
+
+# Terraform files
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# OS files
+.DS_Store
+
+# SQLite Database
+aiops_dashboard.db
+*.db
+
+# Node build directory
+dashboard/dist/
+dashboard/node_modules/
+

@@ -1,0 +1,41 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: self-healing-rules
+  namespace: production
+  labels:
+    role: alert-rules
+    release: prometheus-stack
+spec:
+  groups:
+  - name: self-healing-alerts
+    rules:
+    - alert: PodCrashLooping
+      expr: rate(kube_pod_container_status_restarts_total{namespace="production"}[2m]) * 60 > 1
+      for: 1m
+      labels:
+        severity: critical
+        action: auto-heal
+      annotations:
+        summary: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is crashlooping"
+        description: "Pod is restarting too frequently (rate > 1 restart per minute)."
+
+    - alert: PodHighMemoryUsage
+      expr: sum(container_memory_working_set_bytes{container="sre-ai-agent",namespace="production"}) by (pod, namespace) / sum(kube_pod_container_resource_limits{resource="memory",container="sre-ai-agent",namespace="production"}) by (pod, namespace) * 100 > 90
+      for: 2m
+      labels:
+        severity: warning
+        action: auto-heal
+      annotations:
+        summary: "High memory utilization on Pod {{ $labels.pod }}"
+        description: "Memory usage is above 90% of the defined limit (128Mi)."
+
+    - alert: PodHighCPUUsage
+      expr: sum(rate(container_cpu_usage_seconds_total{container="sre-ai-agent",namespace="production"}[2m])) by (pod, namespace) / sum(kube_pod_container_resource_limits{resource="cpu",container="sre-ai-agent",namespace="production"}) by (pod, namespace) * 100 > 85
+      for: 2m
+      labels:
+        severity: warning
+        action: auto-heal
+      annotations:
+        summary: "High CPU utilization on Pod {{ $labels.pod }}"
+        description: "CPU usage is above 85% of the defined limit (100m)."

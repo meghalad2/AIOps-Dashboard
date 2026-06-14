@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sre-ai-agent
+  namespace: production
+  labels:
+    app: sre-ai-agent
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sre-ai-agent
+  template:
+    metadata:
+      labels:
+        app: sre-ai-agent
+    spec:
+      containers:
+      - name: sre-ai-agent
+        image: 099720109477.dkr.ecr.us-east-1.amazonaws.com/sre-ai-agent:latest
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: sre-ai-agent-config
+        - secretRef:
+            name: sre-ai-agent-secrets
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
